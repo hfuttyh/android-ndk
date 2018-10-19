@@ -70,10 +70,9 @@ GLuint createShader(GLenum shaderType, const char* src) {
     return shader;
 }
 
-GLuint createProgram(const char* vtxSrc, const char* fragSrc, const char* computerSrc) {
+GLuint createProgram(const char* vtxSrc, const char* fragSrc) {
     GLuint vtxShader = 0;
     GLuint fragShader = 0;
-    GLuint computerShader = 0;
     GLuint program = 0;
     GLint linked = GL_FALSE;
 
@@ -85,10 +84,6 @@ GLuint createProgram(const char* vtxSrc, const char* fragSrc, const char* comput
     if (!fragShader)
         goto exit;
 
-    computerShader = createShader(GL_COMPUTE_SHADER, computerSrc);
-    if (!computerShader)
-        goto exit;
-
     program = glCreateProgram();
     if (!program) {
         checkGlError("glCreateProgram");
@@ -97,7 +92,6 @@ GLuint createProgram(const char* vtxSrc, const char* fragSrc, const char* comput
 
     glAttachShader(program, vtxShader);
     glAttachShader(program, fragShader);
-    glAttachShader(program, computerShader);
 
     glLinkProgram(program);
     glGetProgramiv(program, GL_LINK_STATUS, &linked);
@@ -120,6 +114,45 @@ GLuint createProgram(const char* vtxSrc, const char* fragSrc, const char* comput
 exit:
     glDeleteShader(vtxShader);
     glDeleteShader(fragShader);
+    return program;
+}
+
+GLuint createComputeProgram(const char* computerSrc) {
+    GLuint computerShader = 0;
+    GLuint program = 0;
+    GLint linked = GL_FALSE;
+
+    computerShader = createShader(GL_COMPUTE_SHADER, computerSrc);
+    if (!computerShader)
+        goto exit;
+
+    program = glCreateProgram();
+    if (!program) {
+        checkGlError("glCreateProgram");
+        goto exit;
+    }
+
+    glAttachShader(program, computerShader);
+
+    glLinkProgram(program);
+    glGetProgramiv(program, GL_LINK_STATUS, &linked);
+    if (!linked) {
+        ALOGE("Could not link program");
+        GLint infoLogLen = 0;
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &infoLogLen);
+        if (infoLogLen) {
+            GLchar* infoLog = (GLchar*)malloc(infoLogLen);
+            if (infoLog) {
+                glGetProgramInfoLog(program, infoLogLen, NULL, infoLog);
+                ALOGE("Could not link program:\n%s\n", infoLog);
+                free(infoLog);
+            }
+        }
+        glDeleteProgram(program);
+        program = 0;
+    }
+
+    exit:
     glDeleteShader(computerShader);
     return program;
 }
@@ -144,17 +177,17 @@ Renderer::~Renderer() {
 }
 
 void Renderer::resize(int w, int h) {
-    auto offsets = mapOffsetBuf();
-    calcSceneParams(w, h, offsets);
-    unmapOffsetBuf();
-
-    // Auto gives a signed int :-(
-    for (auto i = (unsigned)0; i < mNumInstances; i++) {
-        mAngles[i] = drand48() * TWO_PI;
-        mAngularVelocity[i] = MAX_ROT_SPEED * (2.0*drand48() - 1.0);
-    }
-
-    mLastFrameNs = 0;
+//    auto offsets = mapOffsetBuf();
+//    calcSceneParams(w, h, offsets);
+//    unmapOffsetBuf();
+//
+//    // Auto gives a signed int :-(
+//    for (auto i = (unsigned)0; i < mNumInstances; i++) {
+//        mAngles[i] = drand48() * TWO_PI;
+//        mAngularVelocity[i] = MAX_ROT_SPEED * (2.0*drand48() - 1.0);
+//    }
+//
+//    mLastFrameNs = 0;
 
     glViewport(0, 0, w, h);
 }
@@ -272,8 +305,8 @@ Java_com_android_gles3jni_GLES3JNILib_init(JNIEnv* env, jobject obj) {
     const char* versionStr = (const char*)glGetString(GL_VERSION);
     if (strstr(versionStr, "OpenGL ES 3.") && gl3stubInit()) {
         g_renderer = createES3Renderer();
-    } else if (strstr(versionStr, "OpenGL ES 2.")) {
-        g_renderer = createES2Renderer();
+//    } else if (strstr(versionStr, "OpenGL ES 2.")) {
+//        g_renderer = createES2Renderer();
     } else {
         ALOGE("Unsupported OpenGL ES version");
     }

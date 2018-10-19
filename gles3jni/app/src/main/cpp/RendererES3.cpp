@@ -26,26 +26,25 @@
 #define OFFSET_ATTRIB 3
 
 static const char VERTEX_SHADER[] =
-    "#version 300 es\n"
-    "layout(location = " STRV(POS_ATTRIB) ") in vec2 pos;\n"
-    "layout(location=" STRV(COLOR_ATTRIB) ") in vec4 color;\n"
-    "layout(location=" STRV(SCALEROT_ATTRIB) ") in vec4 scaleRot;\n"
-    "layout(location=" STRV(OFFSET_ATTRIB) ") in vec2 offset;\n"
-    "out vec4 vColor;\n"
-    "void main() {\n"
-    "    mat2 sr = mat2(scaleRot.xy, scaleRot.zw);\n"
-    "    gl_Position = vec4(sr*pos + offset, 0.0, 1.0);\n"
-    "    vColor = color;\n"
+    "#version 310 es\n"
+    "in vec4 a_v4Position;\n"
+    "in vec4 a_v4FillColor;\n"
+    "out vec4 v_v4FillColor;\n"
+    "void main()\n"
+    "{\n"
+    "      v_v4FillColor = a_v4FillColor;\n"
+    "      gl_Position = a_v4Position;\n"
     "}\n";
 
 static const char FRAGMENT_SHADER[] =
-    "#version 300 es\n"
+    "#version 310 es\n"
     "precision mediump float;\n"
-    "in vec4 vColor;\n"
-    "out vec4 outColor;\n"
-    "void main() {\n"
-    "    outColor = vColor;\n"
-    "}\n";
+    "in vec4 v_v4FillColor;\n"
+    "out vec4 FragColor;\n"
+    "void main()\n"
+    "{\n"
+    "      FragColor = v_v4FillColor;\n"
+    "}";
 
 static const char COMPUTER_SHADER[] =
     "#version 310 es\n"
@@ -93,7 +92,7 @@ static const char COMPUTER_SHADER[] =
     "      uint gHeight = gl_WorkGroupSize.y * gl_NumWorkGroups.y;\n"
     "      uint gSize = gWidth * gHeight;\n"
     "      // Since we have 1D array we need to calculate offset.\n"
-    "      uint offset = storePos.y * gWidth + storePos.x;\n"
+    "      uint offset = uint(storePos.y) * gWidth + uint(storePos.x);\n"
     "      // Calculate an angle for the current thread\n"
     "      float alpha = 2.0 * 3.14159265359 * (float(offset) / float(gSize));\n"
     "      // Calculate vertex position based on the already calculate angle\n"
@@ -103,7 +102,7 @@ static const char COMPUTER_SHADER[] =
     "      outBuffer.data[offset].v.z = 0.0;\n"
     "      outBuffer.data[offset].v.w = 1.0;\n"
     "      // Assign colour for the vertex\n"
-    "      outBuffer.data[offset].c.x = storePos.x / float(gWidth);\n"
+    "      outBuffer.data[offset].c.x = float(storePos.x) / float(gWidth);\n"
     "      outBuffer.data[offset].c.y = 0.0;\n"
     "      outBuffer.data[offset].c.z = 1.0;\n"
     "      outBuffer.data[offset].c.w = 1.0;\n"
@@ -123,11 +122,19 @@ private:
     virtual float* mapTransformBuf();
     virtual void unmapTransformBuf();
     virtual void draw(unsigned int numInstances);
+    virtual void step();
+    virtual void render();
 
     const EGLContext mEglContext;
     GLuint mProgram;
+    GLuint mComputeProgram;
     GLuint mVB[VB_COUNT];
     GLuint mVBState;
+
+    int mFrameNumber = 0;
+    GLuint gVBO;
+    GLuint iLocPosition;
+    GLuint iLocFillColor;
 };
 
 Renderer* createES3Renderer() {
@@ -149,36 +156,42 @@ RendererES3::RendererES3()
 }
 
 bool RendererES3::init() {
-    mProgram = createProgram(VERTEX_SHADER, FRAGMENT_SHADER, COMPUTER_SHADER);
+    mProgram = createProgram(VERTEX_SHADER, FRAGMENT_SHADER);
     if (!mProgram)
         return false;
 
-    glGenBuffers(VB_COUNT, mVB);
-    glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_INSTANCE]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(QUAD), &QUAD[0], GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_SCALEROT]);
-    glBufferData(GL_ARRAY_BUFFER, MAX_INSTANCES * 4*sizeof(float), NULL, GL_DYNAMIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_OFFSET]);
-    glBufferData(GL_ARRAY_BUFFER, MAX_INSTANCES * 2*sizeof(float), NULL, GL_STATIC_DRAW);
+    mComputeProgram = createComputeProgram(COMPUTER_SHADER);
+    if (!mComputeProgram)
+        return false;
 
-    glGenVertexArrays(1, &mVBState);
-    glBindVertexArray(mVBState);
-
-    glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_INSTANCE]);
-    glVertexAttribPointer(POS_ATTRIB, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLvoid*)offsetof(Vertex, pos));
-    glVertexAttribPointer(COLOR_ATTRIB, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(Vertex), (const GLvoid*)offsetof(Vertex, rgba));
-    glEnableVertexAttribArray(POS_ATTRIB);
-    glEnableVertexAttribArray(COLOR_ATTRIB);
-
-    glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_SCALEROT]);
-    glVertexAttribPointer(SCALEROT_ATTRIB, 4, GL_FLOAT, GL_FALSE, 4*sizeof(float), 0);
-    glEnableVertexAttribArray(SCALEROT_ATTRIB);
-    glVertexAttribDivisor(SCALEROT_ATTRIB, 1);
-
-    glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_OFFSET]);
-    glVertexAttribPointer(OFFSET_ATTRIB, 2, GL_FLOAT, GL_FALSE, 2*sizeof(float), 0);
-    glEnableVertexAttribArray(OFFSET_ATTRIB);
-    glVertexAttribDivisor(OFFSET_ATTRIB, 1);
+    iLocPosition = glGetAttribLocation(mProgram, "a_v4Position");
+    iLocFillColor = glGetAttribLocation(mProgram, "a_v4FillColor");
+//    glGenBuffers(VB_COUNT, mVB);
+//    glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_INSTANCE]);
+//    glBufferData(GL_ARRAY_BUFFER, sizeof(QUAD), &QUAD[0], GL_STATIC_DRAW);
+//    glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_SCALEROT]);
+//    glBufferData(GL_ARRAY_BUFFER, MAX_INSTANCES * 4*sizeof(float), NULL, GL_DYNAMIC_DRAW);
+//    glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_OFFSET]);
+//    glBufferData(GL_ARRAY_BUFFER, MAX_INSTANCES * 2*sizeof(float), NULL, GL_STATIC_DRAW);
+//
+//    glGenVertexArrays(1, &mVBState);
+//    glBindVertexArray(mVBState);
+//
+//    glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_INSTANCE]);
+//    glVertexAttribPointer(POS_ATTRIB, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLvoid*)offsetof(Vertex, pos));
+//    glVertexAttribPointer(COLOR_ATTRIB, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(Vertex), (const GLvoid*)offsetof(Vertex, rgba));
+//    glEnableVertexAttribArray(POS_ATTRIB);
+//    glEnableVertexAttribArray(COLOR_ATTRIB);
+//
+//    glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_SCALEROT]);
+//    glVertexAttribPointer(SCALEROT_ATTRIB, 4, GL_FLOAT, GL_FALSE, 4*sizeof(float), 0);
+//    glEnableVertexAttribArray(SCALEROT_ATTRIB);
+//    glVertexAttribDivisor(SCALEROT_ATTRIB, 1);
+//
+//    glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_OFFSET]);
+//    glVertexAttribPointer(OFFSET_ATTRIB, 2, GL_FLOAT, GL_FALSE, 2*sizeof(float), 0);
+//    glEnableVertexAttribArray(OFFSET_ATTRIB);
+//    glVertexAttribDivisor(OFFSET_ATTRIB, 1);
 
     ALOGV("Using OpenGL ES 3.0 renderer");
     return true;
@@ -193,8 +206,8 @@ RendererES3::~RendererES3() {
      */
     if (eglGetCurrentContext() != mEglContext)
         return;
-    glDeleteVertexArrays(1, &mVBState);
-    glDeleteBuffers(VB_COUNT, mVB);
+//    glDeleteVertexArrays(1, &mVBState);
+//    glDeleteBuffers(VB_COUNT, mVB);
     glDeleteProgram(mProgram);
 }
 
@@ -224,4 +237,41 @@ void RendererES3::draw(unsigned int numInstances) {
     glUseProgram(mProgram);
     glBindVertexArray(mVBState);
     glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, numInstances);
+}
+
+void RendererES3::step() {
+    glUseProgram(mComputeProgram);
+    GLint iLocRadius = glGetUniformLocation(mComputeProgram, "radius");
+    int gIndexBufferBinding = 0;
+
+    glUniform1f(iLocRadius, (float)mFrameNumber);
+    mFrameNumber = (++mFrameNumber)%1000;
+// Bind the VBO onto SSBO, which is going to filled in witin the compute
+// shader.
+// gIndexBufferBinding is equal to 0 (same as the compute shader binding)
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, gIndexBufferBinding, gVBO);
+// Submit job for the compute shader execution.
+// GROUP_SIZE_HEIGHT = GROUP_SIZE_WIDTH = 8
+// NUM_VERTS_H = NUM_VERTS_V = 16
+// As the result the function is called with the following parameters:
+// glDispatchCompute(2, 2, 1)
+    glDispatchCompute(2, 2, 1);
+// Unbind the SSBO buffer.
+// gIndexBufferBinding is equal to 0 (same as the compute shader binding)
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, gIndexBufferBinding, 0);
+}
+
+void RendererES3::render() {
+    step();
+    glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+
+    glBindBuffer( GL_ARRAY_BUFFER, gVBO );
+
+    glUseProgram(mProgram);
+
+    glEnableVertexAttribArray(iLocPosition);
+    glEnableVertexAttribArray(iLocFillColor);
+// Draw points from VBO
+    glDrawArrays(GL_POINTS, 0, 16);
+    checkGlError("Renderer::render");
 }

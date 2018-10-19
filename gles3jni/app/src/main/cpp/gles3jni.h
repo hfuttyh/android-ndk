@@ -74,7 +74,9 @@ extern const Vertex QUAD[4];
 // returns true if a GL error occurred
 extern bool checkGlError(const char* funcName);
 extern GLuint createShader(GLenum shaderType, const char* src);
-extern GLuint createProgram(const char* vtxSrc, const char* fragSrc, const char* computerSrc);
+extern GLuint createProgram(const char* vtxSrc, const char* fragSrc);
+extern GLuint createComputeProgram(const char* computerSrc);
+
 
 // ----------------------------------------------------------------------------
 // Interface to the ES2 and ES3 renderers, used by JNI code.
@@ -83,7 +85,7 @@ class Renderer {
 public:
     virtual ~Renderer();
     void resize(int w, int h);
-    void render();
+    virtual void render();
 
 protected:
     Renderer();
@@ -99,9 +101,9 @@ protected:
 
     virtual void draw(unsigned int numInstances) = 0;
 
-private:
+protected:
     void calcSceneParams(unsigned int w, unsigned int h, float* offsets);
-    void step();
+    virtual void step();
 
     unsigned int mNumInstances;
     float mScale[2];
