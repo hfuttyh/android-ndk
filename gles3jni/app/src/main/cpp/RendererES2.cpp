@@ -82,7 +82,7 @@ RendererES2::RendererES2()
 {}
 
 bool RendererES2::init() {
-    mProgram = createProgram(VERTEX_SHADER, FRAGMENT_SHADER);
+    mProgram = createProgram(VERTEX_SHADER, FRAGMENT_SHADER, null);
     if (!mProgram)
         return false;
     mPosAttrib = glGetAttribLocation(mProgram, "pos");

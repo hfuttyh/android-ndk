@@ -70,9 +70,10 @@ GLuint createShader(GLenum shaderType, const char* src) {
     return shader;
 }
 
-GLuint createProgram(const char* vtxSrc, const char* fragSrc) {
+GLuint createProgram(const char* vtxSrc, const char* fragSrc, const char* computerSrc) {
     GLuint vtxShader = 0;
     GLuint fragShader = 0;
+    GLuint computerShader = 0;
     GLuint program = 0;
     GLint linked = GL_FALSE;
 
@@ -84,13 +85,19 @@ GLuint createProgram(const char* vtxSrc, const char* fragSrc) {
     if (!fragShader)
         goto exit;
 
+    computerShader = createShader(GL_COMPUTE_SHADER, computerSrc);
+    if (!computerShader)
+        goto exit;
+
     program = glCreateProgram();
     if (!program) {
         checkGlError("glCreateProgram");
         goto exit;
     }
+
     glAttachShader(program, vtxShader);
     glAttachShader(program, fragShader);
+    glAttachShader(program, computerShader);
 
     glLinkProgram(program);
     glGetProgramiv(program, GL_LINK_STATUS, &linked);
@@ -113,6 +120,7 @@ GLuint createProgram(const char* vtxSrc, const char* fragSrc) {
 exit:
     glDeleteShader(vtxShader);
     glDeleteShader(fragShader);
+    glDeleteShader(computerShader);
     return program;
 }
 

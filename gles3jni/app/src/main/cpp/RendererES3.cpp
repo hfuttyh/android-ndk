@@ -47,6 +47,68 @@ static const char FRAGMENT_SHADER[] =
     "    outColor = vColor;\n"
     "}\n";
 
+static const char COMPUTER_SHADER[] =
+    "#version 310 es\n"
+    "// The uniform parameters which is passed from application for every frame.\n"
+    "uniform float radius;\n"
+    "// Declare custom data struct, which represents either vertex or colour.\n"
+    "struct Vector3f\n"
+    "{\n"
+    "      float x;\n"
+    "      float y;\n"
+    "      float z;\n"
+    "      float w;\n"
+    "};\n"
+    "// Declare the custom data type, which represents one point of a circle.\n"
+    "// And this is vertex position and colour respectively.\n"
+    "// As you may already noticed that will define the interleaved data within\n"
+    "// buffer which is Vertex|Colour|Vertex|Colour|…\n"
+    "struct AttribData\n"
+    "{\n"
+    "      Vector3f v;\n"
+    "      Vector3f c;\n"
+    "};\n"
+    "// Declare input/output buffer from/to wich we will read/write data.\n"
+    "// In this particular shader we only write data into the buffer.\n"
+    "// If you do not want your data to be aligned by compiler try to use:\n"
+    "// packed or shared instead of std140 keyword.\n"
+    "// We also bind the buffer to index 0. You need to set the buffer binding\n"
+    "// in the range [0..3] – this is the minimum range approved by Khronos.\n"
+    "// Notice that various platforms might support more indices than that.\n"
+    "layout(std140, binding = 0) buffer destBuffer\n"
+    "{\n"
+    "      AttribData data[];\n"
+    "} outBuffer;\n"
+    "// Declare what size is the group. In our case is 8x8, which gives\n"
+    "// 64 group size.\n"
+    "layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;\n"
+    "// Declare main program function which is executed once\n"
+    "// glDispatchCompute is called from the application.\n"
+    "void main()\n"
+    "{\n"
+    "      // Read current global position for this thread\n"
+    "      ivec2 storePos = ivec2(gl_GlobalInvocationID.xy);\n"
+    "      // Calculate the global number of threads (size) for this\n"
+    "      uint gWidth = gl_WorkGroupSize.x * gl_NumWorkGroups.x;\n"
+    "      uint gHeight = gl_WorkGroupSize.y * gl_NumWorkGroups.y;\n"
+    "      uint gSize = gWidth * gHeight;\n"
+    "      // Since we have 1D array we need to calculate offset.\n"
+    "      uint offset = storePos.y * gWidth + storePos.x;\n"
+    "      // Calculate an angle for the current thread\n"
+    "      float alpha = 2.0 * 3.14159265359 * (float(offset) / float(gSize));\n"
+    "      // Calculate vertex position based on the already calculate angle\n"
+    "      // and radius, which is given by application\n"
+    "      outBuffer.data[offset].v.x = sin(alpha) * radius;\n"
+    "      outBuffer.data[offset].v.y = cos(alpha) * radius;\n"
+    "      outBuffer.data[offset].v.z = 0.0;\n"
+    "      outBuffer.data[offset].v.w = 1.0;\n"
+    "      // Assign colour for the vertex\n"
+    "      outBuffer.data[offset].c.x = storePos.x / float(gWidth);\n"
+    "      outBuffer.data[offset].c.y = 0.0;\n"
+    "      outBuffer.data[offset].c.z = 1.0;\n"
+    "      outBuffer.data[offset].c.w = 1.0;\n"
+    "}";
+
 class RendererES3: public Renderer {
 public:
     RendererES3();
@@ -87,7 +149,7 @@ RendererES3::RendererES3()
 }
 
 bool RendererES3::init() {
-    mProgram = createProgram(VERTEX_SHADER, FRAGMENT_SHADER);
+    mProgram = createProgram(VERTEX_SHADER, FRAGMENT_SHADER, COMPUTER_SHADER);
     if (!mProgram)
         return false;
 

@@ -74,7 +74,7 @@ extern const Vertex QUAD[4];
 // returns true if a GL error occurred
 extern bool checkGlError(const char* funcName);
 extern GLuint createShader(GLenum shaderType, const char* src);
-extern GLuint createProgram(const char* vtxSrc, const char* fragSrc);
+extern GLuint createProgram(const char* vtxSrc, const char* fragSrc, const char* computerSrc);
 
 // ----------------------------------------------------------------------------
 // Interface to the ES2 and ES3 renderers, used by JNI code.
