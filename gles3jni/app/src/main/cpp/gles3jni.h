@@ -18,6 +18,8 @@
 #define GLES3JNI_H 1
 
 #include <android/log.h>
+#include <android/asset_manager.h>
+#include <android/asset_manager_jni.h>
 #include <math.h>
 
 #if DYNAMIC_ES3
@@ -90,29 +92,14 @@ public:
 protected:
     Renderer();
 
-    // return a pointer to a buffer of MAX_INSTANCES * sizeof(vec2).
-    // the buffer is filled with per-instance offsets, then unmapped.
-    virtual float* mapOffsetBuf() = 0;
-    virtual void unmapOffsetBuf() = 0;
-    // return a pointer to a buffer of MAX_INSTANCES * sizeof(vec4).
-    // the buffer is filled with per-instance scale and rotation transforms.
-    virtual float* mapTransformBuf() = 0;
-    virtual void unmapTransformBuf() = 0;
-
     virtual void draw(unsigned int numInstances) = 0;
 
 protected:
-    void calcSceneParams(unsigned int w, unsigned int h, float* offsets);
     virtual void step();
 
     unsigned int mNumInstances;
-    float mScale[2];
-    float mAngularVelocity[MAX_INSTANCES];
-    uint64_t mLastFrameNs;
-    float mAngles[MAX_INSTANCES];
 };
 
-extern Renderer* createES2Renderer();
-extern Renderer* createES3Renderer();
+extern Renderer* createES3Renderer(AAssetManager* asset);
 
 #endif // GLES3JNI_H

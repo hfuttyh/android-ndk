@@ -33,9 +33,11 @@ import javax.microedition.khronos.opengles.GL10;
 class GLES3JNIView extends GLSurfaceView {
     private static final String TAG = "GLES3JNI";
     private static final boolean DEBUG = true;
+    private static Context mContext = null;
 
     public GLES3JNIView(Context context) {
         super(context);
+        mContext = context;
         // Pick an EGLConfig with RGB8 color, 16-bit depth, no stencil,
         // supporting OpenGL ES 2.0 or later backwards-compatible versions.
         setEGLConfigChooser(8, 8, 8, 0, 16, 0);
@@ -53,7 +55,7 @@ class GLES3JNIView extends GLSurfaceView {
         }
 
         public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-            GLES3JNILib.init();
+            GLES3JNILib.init(mContext.getAssets());
         }
     }
 }
