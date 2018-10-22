@@ -244,12 +244,12 @@ void RendererES3::step() {
 // NUM_VERTS_H = NUM_VERTS_V = 16
 // As the result the function is called with the following parameters:
 // glDispatchCompute(2, 2, 1)
-    glDispatchCompute(2, 2, 1);
+    glDispatchCompute(4, 4, 1);
 // Unbind the SSBO buffer.
 // gIndexBufferBinding is equal to 0 (same as the compute shader binding)
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, gIndexBufferBinding, 0);
 
-    glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+    glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT|GL_SHADER_STORAGE_BARRIER_BIT);
 
     glBindBuffer( GL_ARRAY_BUFFER, gVBO );
 
@@ -263,6 +263,29 @@ void RendererES3::step() {
     // glDrawArrays(GL_POINTS, 0, 256);
     int32_t* buff = (int32_t *)glMapBufferRange(GL_ARRAY_BUFFER, 0, 32*256, GL_MAP_READ_BIT);
     int size = 8;
+    for (int k = 0; k < 256; k++)
+    {
+        int offset = k*8;
+        ALOGE("id:%d, position wx:%d, wy:%d, gx:%d, gy:%d, lxx:%d, ly:%d, nx:%d, ny:%d\n", k,
+              buff[offset], buff[offset+1], buff[offset+2], buff[offset+3],
+              buff[offset+4], buff[offset+5], buff[offset+6], buff[offset+7]);
+    }
+    glBindBuffer( GL_ARRAY_BUFFER, 0);
+
+    glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT|GL_SHADER_STORAGE_BARRIER_BIT);
+
+    glBindBuffer( GL_ARRAY_BUFFER, gVBO );
+
+    glUseProgram(mProgram);
+
+//    glEnableVertexAttribArray(iLocPosition);
+//    glEnableVertexAttribArray(iLocFillColor);
+// Draw points from VBO
+//    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
+//    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, 0);
+    // glDrawArrays(GL_POINTS, 0, 256);
+    buff = (int32_t *)glMapBufferRange(GL_ARRAY_BUFFER, 0, 32*256, GL_MAP_READ_BIT);
+    size = 8;
     for (int k = 0; k < 256; k++)
     {
         int offset = k*8;

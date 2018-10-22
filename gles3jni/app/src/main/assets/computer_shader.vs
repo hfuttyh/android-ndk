@@ -43,7 +43,7 @@ void main()
       uint gHeight = gl_WorkGroupSize.y * gl_NumWorkGroups.y;
       uint gSize = gWidth * gHeight;
       // Since we have 1D array we need to calculate offset.
-      uint offset = uint(storePos.y) * gSize + uint(storePos.x);
+      uint offset = uint(storePos.y) * gWidth + uint(storePos.x);
       // Calculate an angle for the current thread
       float alpha = 2.0 * 3.14159265359 * (float(offset) / float(gSize));
       // Calculate vertex position based on the already calculate angle
