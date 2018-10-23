@@ -23,15 +23,6 @@
 
 #include "gles3jni.h"
 
-const Vertex QUAD[4] = {
-    // Square with diagonal < 2 so that it fits in a [-1 .. 1]^2 square
-    // regardless of rotation.
-    {{-0.7f, -0.7f}, {0x00, 0xFF, 0x00}},
-    {{ 0.7f, -0.7f}, {0x00, 0x00, 0xFF}},
-    {{-0.7f,  0.7f}, {0xFF, 0x00, 0x00}},
-    {{ 0.7f,  0.7f}, {0xFF, 0xFF, 0xFF}},
-};
-
 bool checkGlError(const char* funcName) {
     GLint err = glGetError();
     if (err != GL_NO_ERROR) {
@@ -166,74 +157,7 @@ static void printGlString(const char* name, GLenum s) {
 
 // ----------------------------------------------------------------------------
 
-Renderer::Renderer()
-:   mNumInstances(0)
-{
-}
-
-Renderer::~Renderer() {
-}
-
-void Renderer::resize(int w, int h) {
-//    auto offsets = mapOffsetBuf();
-//    calcSceneParams(w, h, offsets);
-//    unmapOffsetBuf();
-//
-//    // Auto gives a signed int :-(
-//    for (auto i = (unsigned)0; i < mNumInstances; i++) {
-//        mAngles[i] = drand48() * TWO_PI;
-//        mAngularVelocity[i] = MAX_ROT_SPEED * (2.0*drand48() - 1.0);
-//    }
-//
-//    mLastFrameNs = 0;
-
-    glViewport(0, 0, w, h);
-}
-
-void Renderer::step() {
-//    timespec now;
-//    clock_gettime(CLOCK_MONOTONIC, &now);
-//    auto nowNs = now.tv_sec*1000000000ull + now.tv_nsec;
-//
-//    if (mLastFrameNs > 0) {
-//        float dt = float(nowNs - mLastFrameNs) * 0.000000001f;
-//
-//        for (unsigned int i = 0; i < mNumInstances; i++) {
-//            mAngles[i] += mAngularVelocity[i] * dt;
-//            if (mAngles[i] >= TWO_PI) {
-//                mAngles[i] -= TWO_PI;
-//            } else if (mAngles[i] <= -TWO_PI) {
-//                mAngles[i] += TWO_PI;
-//            }
-//        }
-//
-//        float* transforms = mapTransformBuf();
-//        for (unsigned int i = 0; i < mNumInstances; i++) {
-//            float s = sinf(mAngles[i]);
-//            float c = cosf(mAngles[i]);
-//            transforms[4*i + 0] =  c * mScale[0];
-//            transforms[4*i + 1] =  s * mScale[1];
-//            transforms[4*i + 2] = -s * mScale[0];
-//            transforms[4*i + 3] =  c * mScale[1];
-//        }
-//        unmapTransformBuf();
-//    }
-//
-//    mLastFrameNs = nowNs;
-}
-
-void Renderer::render() {
-    step();
-
-    glClearColor(0.2f, 0.2f, 0.3f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    draw(mNumInstances);
-    checkGlError("Renderer::render");
-}
-
-// ----------------------------------------------------------------------------
-
-static Renderer* g_renderer = NULL;
+static RenderES3* g_renderer = NULL;
 
 extern "C" {
     JNIEXPORT void JNICALL Java_com_android_gles3jni_GLES3JNILib_init(JNIEnv* env, jobject obj, jobject assetobj);

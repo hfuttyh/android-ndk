@@ -15,11 +15,7 @@
  */
 
 #include "gles3jni.h"
-#include <EGL/egl.h>
-#include <stdio.h>
-#include <jni.h>
-#include <android/asset_manager.h>
-#include <android/asset_manager_jni.h>
+#include "RenderES3.h"
 
 #define STR(s) #s
 #define STRV(s) STR(s)
@@ -50,94 +46,9 @@ static const char FRAGMENT_SHADER[] =
     "      FragColor = v_v4FillColor;\n"
     "}";
 
-static const char COMPUTER_SHADER[] =
-    "#version 310 es\n"
-    "// The uniform parameters which is passed from application for every frame.\n"
-    "uniform float radius;\n"
-    "// Declare custom data struct, which represents either vertex or colour.\n"
-    "struct Vector3f\n"
-    "{\n"
-    "      float x;\n"
-    "      float y;\n"
-    "      float z;\n"
-    "      float w;\n"
-    "};\n"
-    "// Declare the custom data type, which represents one point of a circle.\n"
-    "// And this is vertex position and colour respectively.\n"
-    "// As you may already noticed that will define the interleaved data within\n"
-    "// buffer which is Vertex|Colour|Vertex|Colour|…\n"
-    "struct AttribData\n"
-    "{\n"
-    "      Vector3f v;\n"
-    "      Vector3f c;\n"
-    "};\n"
-    "// Declare input/output buffer from/to wich we will read/write data.\n"
-    "// In this particular shader we only write data into the buffer.\n"
-    "// If you do not want your data to be aligned by compiler try to use:\n"
-    "// packed or shared instead of std140 keyword.\n"
-    "// We also bind the buffer to index 0. You need to set the buffer binding\n"
-    "// in the range [0..3] – this is the minimum range approved by Khronos.\n"
-    "// Notice that various platforms might support more indices than that.\n"
-    "layout(std140, binding = 0) buffer destBuffer\n"
-    "{\n"
-    "      AttribData data[];\n"
-    "} outBuffer;\n"
-    "// Declare what size is the group. In our case is 8x8, which gives\n"
-    "// 64 group size.\n"
-    "layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;\n"
-    "// Declare main program function which is executed once\n"
-    "// glDispatchCompute is called from the application.\n"
-    "void main()\n"
-    "{\n"
-    "      // Read current global position for this thread\n"
-    "      ivec2 storePos = ivec2(gl_GlobalInvocationID.xy);\n"
-    "      // Calculate the global number of threads (size) for this\n"
-    "      uint gWidth = gl_WorkGroupSize.x * gl_NumWorkGroups.x;\n"
-    "      uint gHeight = gl_WorkGroupSize.y * gl_NumWorkGroups.y;\n"
-    "      uint gSize = gWidth * gHeight;\n"
-    "      // Since we have 1D array we need to calculate offset.\n"
-    "      uint offset = uint(storePos.y) * gWidth + uint(storePos.x);\n"
-    "      // Calculate an angle for the current thread\n"
-    "      float alpha = 2.0 * 3.14159265359 * (float(offset) / float(gSize));\n"
-    "      // Calculate vertex position based on the already calculate angle\n"
-    "      // and radius, which is given by application\n"
-    "      outBuffer.data[offset].v.x = sin(alpha) * radius;\n"
-    "      outBuffer.data[offset].v.y = cos(alpha) * radius;\n"
-    "      outBuffer.data[offset].v.z = 0.0;\n"
-    "      outBuffer.data[offset].v.w = 1.0;\n"
-    "      // Assign colour for the vertex\n"
-    "      outBuffer.data[offset].c.x = float(storePos.x) / float(gWidth);\n"
-    "      outBuffer.data[offset].c.y = 0.0;\n"
-    "      outBuffer.data[offset].c.z = 1.0;\n"
-    "      outBuffer.data[offset].c.w = 1.0;\n"
-    "}";
 
-class RendererES3: public Renderer {
-public:
-    RendererES3();
-    virtual ~RendererES3();
-    bool init(AAssetManager* mgr);
-
-private:
-    virtual void draw(unsigned int numInstances);
-    virtual void step();
-    virtual void render();
-
-    const EGLContext mEglContext;
-    GLuint mProgram;
-    GLuint mComputeProgram;
-    GLuint mVBState;
-
-    int mFrameNumber = 0;
-    GLuint gVBO;
-    GLuint iLocPosition;
-    GLuint iLocFillColor;
-
-    int32_t mBuf[32*256];
-};
-
-Renderer* createES3Renderer(AAssetManager* asset) {
-    RendererES3* renderer = new RendererES3;
+RenderES3* createES3Renderer(AAssetManager* asset) {
+    RenderES3* renderer = new RenderES3;
     if (!renderer->init(asset)) {
         delete renderer;
         return NULL;
@@ -145,13 +56,13 @@ Renderer* createES3Renderer(AAssetManager* asset) {
     return renderer;
 }
 
-RendererES3::RendererES3()
+RenderES3::RenderES3()
 :   mEglContext(eglGetCurrentContext()),
     mProgram(0),
     mVBState(0)
 {}
 
-bool RendererES3::init(AAssetManager* mgr) {
+bool RenderES3::init(AAssetManager* mgr) {
     mProgram = createProgram(VERTEX_SHADER, FRAGMENT_SHADER);
     if (!mProgram)
         return false;
@@ -176,7 +87,7 @@ bool RendererES3::init(AAssetManager* mgr) {
     return true;
 }
 
-RendererES3::~RendererES3() {
+RenderES3::~RenderES3() {
     /* The destructor may be called after the context has already been
      * destroyed, in which case our objects have already been destroyed.
      *
@@ -185,18 +96,11 @@ RendererES3::~RendererES3() {
      */
     if (eglGetCurrentContext() != mEglContext)
         return;
-//    glDeleteVertexArrays(1, &mVBState);
-//    glDeleteBuffers(VB_COUNT, mVB);
     glDeleteProgram(mProgram);
+    glDeleteProgram(mComputeProgram);
 }
 
-void RendererES3::draw(unsigned int numInstances) {
-    glUseProgram(mProgram);
-    glBindVertexArray(mVBState);
-    glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, numInstances);
-}
-
-void RendererES3::step() {
+void RenderES3::step() {
     glUseProgram(mComputeProgram);
     GLint iLocRadius = glGetUniformLocation(mComputeProgram, "radius");
     int gIndexBufferBinding = 0;
@@ -239,6 +143,9 @@ void RendererES3::step() {
         glGetIntegeri_v(enumName, 0, &out);
         ALOGE("%d\n", out);
     }
+
+    glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &out);
+    ALOGE("GL_MAX_SHADER_STORAGE_BLOCK_SIZE:%d\n", out);
 // Submit job for the compute shader execution.
 // GROUP_SIZE_HEIGHT = GROUP_SIZE_WIDTH = 8
 // NUM_VERTS_H = NUM_VERTS_V = 16
@@ -252,40 +159,7 @@ void RendererES3::step() {
     glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT|GL_SHADER_STORAGE_BARRIER_BIT);
 
     glBindBuffer( GL_ARRAY_BUFFER, gVBO );
-
-    glUseProgram(mProgram);
-
-//    glEnableVertexAttribArray(iLocPosition);
-//    glEnableVertexAttribArray(iLocFillColor);
-// Draw points from VBO
-//    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
-//    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, 0);
-    // glDrawArrays(GL_POINTS, 0, 256);
     int32_t* buff = (int32_t *)glMapBufferRange(GL_ARRAY_BUFFER, 0, 32*256, GL_MAP_READ_BIT);
-    int size = 8;
-    for (int k = 0; k < 256; k++)
-    {
-        int offset = k*8;
-        ALOGE("id:%d, position wx:%d, wy:%d, gx:%d, gy:%d, lxx:%d, ly:%d, nx:%d, ny:%d\n", k,
-              buff[offset], buff[offset+1], buff[offset+2], buff[offset+3],
-              buff[offset+4], buff[offset+5], buff[offset+6], buff[offset+7]);
-    }
-    glBindBuffer( GL_ARRAY_BUFFER, 0);
-
-    glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT|GL_SHADER_STORAGE_BARRIER_BIT);
-
-    glBindBuffer( GL_ARRAY_BUFFER, gVBO );
-
-    glUseProgram(mProgram);
-
-//    glEnableVertexAttribArray(iLocPosition);
-//    glEnableVertexAttribArray(iLocFillColor);
-// Draw points from VBO
-//    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
-//    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, 0);
-    // glDrawArrays(GL_POINTS, 0, 256);
-    buff = (int32_t *)glMapBufferRange(GL_ARRAY_BUFFER, 0, 32*256, GL_MAP_READ_BIT);
-    size = 8;
     for (int k = 0; k < 256; k++)
     {
         int offset = k*8;
@@ -297,7 +171,7 @@ void RendererES3::step() {
     checkGlError("Renderer::render");
 }
 
-void RendererES3::render() {
+void RenderES3::render() {
 //    step();
 //    glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 //

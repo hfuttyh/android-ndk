@@ -21,6 +21,7 @@
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
 #include <math.h>
+#include "RenderES3.h"
 
 #if DYNAMIC_ES3
 #include "gl3stub.h"
@@ -55,51 +56,11 @@
 #define TWO_PI          (2.0 * M_PI)
 #define MAX_ROT_SPEED   (0.3 * TWO_PI)
 
-// This demo uses three coordinate spaces:
-// - The model (a quad) is in a [-1 .. 1]^2 space
-// - Scene space is either
-//    landscape: [-1 .. 1] x [-1/(2*w/h) .. 1/(2*w/h)]
-//    portrait:  [-1/(2*h/w) .. 1/(2*h/w)] x [-1 .. 1]
-// - Clip space in OpenGL is [-1 .. 1]^2
-//
-// Conceptually, the quads are rotated in model space, then scaled (uniformly)
-// and translated to place them in scene space. Scene space is then
-// non-uniformly scaled to clip space. In practice the transforms are combined
-// so vertices go directly from model to clip space.
-
-struct Vertex {
-    GLfloat pos[2];
-    GLubyte rgba[4];
-};
-extern const Vertex QUAD[4];
-
 // returns true if a GL error occurred
 extern bool checkGlError(const char* funcName);
 extern GLuint createShader(GLenum shaderType, const char* src);
 extern GLuint createProgram(const char* vtxSrc, const char* fragSrc);
 extern GLuint createComputeProgram(const char* computerSrc);
-
-
-// ----------------------------------------------------------------------------
-// Interface to the ES2 and ES3 renderers, used by JNI code.
-
-class Renderer {
-public:
-    virtual ~Renderer();
-    void resize(int w, int h);
-    virtual void render();
-
-protected:
-    Renderer();
-
-    virtual void draw(unsigned int numInstances) = 0;
-
-protected:
-    virtual void step();
-
-    unsigned int mNumInstances;
-};
-
-extern Renderer* createES3Renderer(AAssetManager* asset);
+extern RenderES3* createES3Renderer(AAssetManager* asset);
 
 #endif // GLES3JNI_H
