@@ -47,6 +47,18 @@ static const char FRAGMENT_SHADER[] =
     "      FragColor = v_v4FillColor;\n"
     "}";
 
+void print2dFloatArray(float* buff, int x, int y, int offset){
+    char str[10240];
+    for (int i = 0; i < y; i++){
+        memset(str, 0, 1024);
+        sprintf(str, "%d:", i);
+        for (int j = 0; j< x; j++){
+            sprintf(str, "%s %6.4f", str, buff[offset+i*x+j]);
+        }
+        ALOGE("%s", str);
+    }
+}
+
 RenderES3* createES3Renderer(AAssetManager* asset) {
     RenderES3* renderer = new RenderES3;
     if (!renderer->init(asset)) {
@@ -118,14 +130,18 @@ void RenderES3::step() {
 //Bind Data
     int gIndexBufferBinding = 0;
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, gDataBuff);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mDataLen, &mDataBuff, GL_DYNAMIC_DRAW);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, gIndexBufferBinding, gDataBuff);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mDataLen, mDataBuff, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, gDataBuff);
+    print2dFloatArray(mDataBuff, 160, 240, 0);
+    ALOGE("-0-0-0-0-0-0-0-0-0-0-0-0");
+    print2dFloatArray(mDataBuff, 160, 240, 38400);
 
 //Bind it
     gIndexBufferBinding = 1;
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, gCCBuff);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mConvLen, &mConvCoreBuff,  GL_STATIC_READ);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, gIndexBufferBinding, gCCBuff);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mConvLen, mConvCoreBuff,  GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, gCCBuff);
+    print2dFloatArray(mConvCoreBuff, 3, 3, 0);
 
     GLint out;
     GLenum enumName = GL_MAX_COMPUTE_WORK_GROUP_COUNT;
@@ -155,59 +171,21 @@ void RenderES3::step() {
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &out);
     ALOGE("GL_MAX_SHADER_STORAGE_BLOCK_SIZE:%d\n", out);
     glDispatchCompute(1, 1, 1);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, gIndexBufferBinding, 0);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
 
     glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
     glBindBuffer( GL_ARRAY_BUFFER, gDataBuff );
     float* buff = (float *)glMapBufferRange(GL_ARRAY_BUFFER, 0, 4*mDataLen, GL_MAP_READ_BIT);
 
-    char str[1024];
-    for (int i = 0; i < 32; i++){
-        memset(str, 0, 1024);
-        for (int j = 0; j< 32; j++){
-            sprintf(str, "%s %6.4f", str, buff[i*32+j]);
-            //        int offset = k*8;
-            //        ALOGE("id:%d, position wx:%d, wy:%d, gx:%d, gy:%d, lxx:%d, ly:%d, nx:%d, ny:%d\n", k,
-            //              buff[offset], buff[offset+1], buff[offset+2], buff[offset+3],
-            //              buff[offset+4], buff[offset+5], buff[offset+6], buff[offset+7]);
-        }
-        ALOGE("%s", str);
-    }
-    for (int i = 0; i < 32; i++){
-        memset(str, 0, 1024);
-        for (int j = 0; j< 32; j++){
-            sprintf(str, "%s %6.4f", str, buff[32*32+i*32+j]);
-            //        int offset = k*8;
-            //        ALOGE("id:%d, position wx:%d, wy:%d, gx:%d, gy:%d, lxx:%d, ly:%d, nx:%d, ny:%d\n", k,
-            //              buff[offset], buff[offset+1], buff[offset+2], buff[offset+3],
-            //              buff[offset+4], buff[offset+5], buff[offset+6], buff[offset+7]);
-        }
-        ALOGE("%s", str);
-    }
+    print2dFloatArray(buff, 160, 240, 0);
+    ALOGE("=============================================");
+    print2dFloatArray(buff, 160, 240, 160*240);
+
     glBindBuffer( GL_ARRAY_BUFFER, 0);
     checkGlError("Renderer::render");
 }
 
 void RenderES3::render() {
-//    step();
-//    glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
-//
-//    glBindBuffer( GL_ARRAY_BUFFER, gVBO );
-//
-    glUseProgram(mProgram);
-//
-//    glEnableVertexAttribArray(iLocPosition);
-//    glEnableVertexAttribArray(iLocFillColor);
-//// Draw points from VBO
-//    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
-//    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, 0);
-//    // glDrawArrays(GL_POINTS, 0, 256);
-//    float* buff = (float*)glMapBufferRange(GL_ARRAY_BUFFER, 0, 32*256, GL_MAP_READ_BIT);
-//    for (int k = 0; k < 256; k++)
-//    {
-//        ALOGE("id:%d, position x:%5.2f, y:%5.2f, z:%5.2f, w:%5.2f\n", k, buff[offset], buff[offset+1], buff[offset+2], buff[offset+3]);
-//    }
-//    glBindBuffer( GL_ARRAY_BUFFER, 0);
-//    checkGlError("Renderer::render");
 }

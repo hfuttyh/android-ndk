@@ -1,6 +1,6 @@
 #version 310 es
-#define PIXW 32
-#define PIXH 32
+#define PIXW 160
+#define PIXH 240
 #define CONVCORESIZE 9
 layout(std140, binding = 0) buffer destBuffer
 {
@@ -22,25 +22,27 @@ void main()
 {
 	int baseOffset = (int(gl_WorkGroupID.x)+1)*PIXW*PIXH;
 	int convCoreOffset = int(gl_WorkGroupID.x)*(CONVCORESIZE+1); // 9 convcore, 1 bias
-      int pixOffset = int(gl_LocalInvocationID.y)*PIXW + int(gl_LocalInvocationID.x);
-      ivec2 position = ivec2(gl_LocalInvocationID.xy);
+	int pixOffset = int(gl_LocalInvocationID.y)*PIXW + int(gl_LocalInvocationID.x);
+	ivec2 position = ivec2(gl_LocalInvocationID.xy);
 
-      float pix[9];
-      pix[0] = position.y > 0 && position.x > 0 ? workSpace.data[pixOffset-PIXW-1] : 0.f;
-      pix[1] = position.y > 0 ? workSpace.data[pixOffset-PIXW] : 0.f;
-      pix[2] = position.y > 0 && position.x < PIXW-1 ? workSpace.data[pixOffset-PIXW+1] : 0.f;
-      pix[3] = position.x > 0 ? workSpace.data[pixOffset-1] : 0.f;
-      pix[4] = workSpace.data[pixOffset];
-      pix[5] = position.x < PIXW-1 ? workSpace.data[pixOffset+1] : 0.f;
-      pix[6] = position.y < PIXH-1 && position.x > 0 ? workSpace.data[pixOffset+PIXW-1] : 0.f;
-      pix[7] = position.y < PIXH-1 ? workSpace.data[pixOffset+PIXW] : 0.f;
-      pix[8] = position.y < PIXH-1 && position.x < PIXW-1 ? workSpace.data[pixOffset+PIXW+1] : 0.f;
+	workSpace.data[38400] = 9920.f;
 
-      float result = 0.f;
-      for (int k = 0; k < 9; k++)
-      {
-            result += convCore.data[convCoreOffset+k]*pix[k];
-      }
+	float pix[9];
+	pix[0] = position.y > 0 && position.x > 0 ? workSpace.data[pixOffset-PIXW-1] : 0.f;
+	pix[1] = position.y > 0 ? workSpace.data[pixOffset-PIXW] : 0.f;
+	pix[2] = position.y > 0 && position.x < PIXW-1 ? workSpace.data[pixOffset-PIXW+1] : 0.f;
+	pix[3] = position.x > 0 ? workSpace.data[pixOffset-1] : 0.f;
+	pix[4] = workSpace.data[pixOffset];
+	pix[5] = position.x < PIXW-1 ? workSpace.data[pixOffset+1] : 0.f;
+	pix[6] = position.y < PIXH-1 && position.x > 0 ? workSpace.data[pixOffset+PIXW-1] : 0.f;
+	pix[7] = position.y < PIXH-1 ? workSpace.data[pixOffset+PIXW] : 0.f;
+	pix[8] = position.y < PIXH-1 && position.x < PIXW-1 ? workSpace.data[pixOffset+PIXW+1] : 0.f;
 
-      workSpace.data[baseOffset+pixOffset] = result;
+	float result = 0.f;
+	for (int k = 0; k < 9; k++)
+	{
+	    result += convCore.data[convCoreOffset+k]*pix[k];
+	}
+
+	workSpace.data[baseOffset+pixOffset] = result;
 }
