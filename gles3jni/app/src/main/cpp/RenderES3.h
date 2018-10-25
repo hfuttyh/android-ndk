@@ -44,10 +44,12 @@ private:
     GLuint mVBState;
 
     int mFrameNumber = 0;
-    GLuint gVBO;
-    GLuint iLocPosition;
-    GLuint iLocFillColor;
+    GLuint gDataBuff;
+    GLuint gCCBuff;
 
-    int32_t mBuf[32*256];
+    int mDataLen;
+    int mConvLen;
+    float *mDataBuff;
+    float *mConvCoreBuff;
 };
 #endif //GLES3JNI_RENDERES3_H

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include "gles3jni.h"
 #include "RenderES3.h"
 
@@ -46,7 +47,6 @@ static const char FRAGMENT_SHADER[] =
     "      FragColor = v_v4FillColor;\n"
     "}";
 
-
 RenderES3* createES3Renderer(AAssetManager* asset) {
     RenderES3* renderer = new RenderES3;
     if (!renderer->init(asset)) {
@@ -63,24 +63,36 @@ RenderES3::RenderES3()
 {}
 
 bool RenderES3::init(AAssetManager* mgr) {
-    mProgram = createProgram(VERTEX_SHADER, FRAGMENT_SHADER);
-    if (!mProgram)
-        return false;
-
-    AAsset* asset = AAssetManager_open(mgr, "computer_shader.vs", AASSET_MODE_BUFFER);
+    char* buff;
+    AAsset* asset = AAssetManager_open(mgr, "conv1_group.vs", AASSET_MODE_BUFFER);
     off64_t len = AAsset_getLength64(asset);
-    char* src = new char[len];
-    AAsset_read(asset, src, len);
+    buff = new char[len];
+    AAsset_read(asset, buff, len);
     AAsset_close(asset);
 
-    mComputeProgram = createComputeProgram(src);
+    mComputeProgram = createComputeProgram(buff);
     if (!mComputeProgram)
         return false;
+    delete[] buff;
 
-    iLocPosition = glGetAttribLocation(mProgram, "a_v4Position");
-    iLocFillColor = glGetAttribLocation(mProgram, "a_v4FillColor");
+    asset = AAssetManager_open(mgr, "model_param.bin", AASSET_MODE_BUFFER);
+    len = AAsset_getLength64(asset);
+    mConvLen = len/4;
+    mConvCoreBuff = new float[len/4];
+    buff = (char*) mConvCoreBuff;
+    AAsset_read(asset, buff, len);
+    AAsset_close(asset);
 
-    glGenBuffers(1, &gVBO);
+    asset = AAssetManager_open(mgr, "img_y.bin", AASSET_MODE_BUFFER);
+    len = AAsset_getLength64(asset);
+    mDataLen = len/4*2;
+    mDataBuff = new float[len/4*2];
+    buff = (char*) mDataBuff;
+    AAsset_read(asset, buff, len);
+    AAsset_close(asset);
+
+    glGenBuffers(1, &gDataBuff);
+    glGenBuffers(1, &gCCBuff);
 
     step();
     ALOGV("Using OpenGL ES 3.0 renderer");
@@ -102,22 +114,18 @@ RenderES3::~RenderES3() {
 
 void RenderES3::step() {
     glUseProgram(mComputeProgram);
-    GLint iLocRadius = glGetUniformLocation(mComputeProgram, "radius");
-    int gIndexBufferBinding = 0;
 
-    glUniform1f(iLocRadius, (float)mFrameNumber);
-    mFrameNumber = (++mFrameNumber)%1000;
+//Bind Data
+    int gIndexBufferBinding = 0;
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, gDataBuff);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mDataLen, &mDataBuff, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, gIndexBufferBinding, gDataBuff);
 
 //Bind it
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, gVBO);
-
-//Set the data of the buffer
-    glBufferData(GL_SHADER_STORAGE_BUFFER, 32 * 256, &mBuf, GL_DYNAMIC_DRAW);
-
-// Bind the VBO onto SSBO, which is going to filled in witin the compute
-// shader.
-// gIndexBufferBinding is equal to 0 (same as the compute shader binding)
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, gIndexBufferBinding, gVBO);
+    gIndexBufferBinding = 1;
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, gCCBuff);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mConvLen, &mConvCoreBuff,  GL_STATIC_READ);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, gIndexBufferBinding, gCCBuff);
 
     GLint out;
     GLenum enumName = GL_MAX_COMPUTE_WORK_GROUP_COUNT;
@@ -146,26 +154,36 @@ void RenderES3::step() {
 
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &out);
     ALOGE("GL_MAX_SHADER_STORAGE_BLOCK_SIZE:%d\n", out);
-// Submit job for the compute shader execution.
-// GROUP_SIZE_HEIGHT = GROUP_SIZE_WIDTH = 8
-// NUM_VERTS_H = NUM_VERTS_V = 16
-// As the result the function is called with the following parameters:
-// glDispatchCompute(2, 2, 1)
-    glDispatchCompute(4, 4, 1);
-// Unbind the SSBO buffer.
-// gIndexBufferBinding is equal to 0 (same as the compute shader binding)
+    glDispatchCompute(1, 1, 1);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, gIndexBufferBinding, 0);
 
-    glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT|GL_SHADER_STORAGE_BARRIER_BIT);
+    glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
-    glBindBuffer( GL_ARRAY_BUFFER, gVBO );
-    int32_t* buff = (int32_t *)glMapBufferRange(GL_ARRAY_BUFFER, 0, 32*256, GL_MAP_READ_BIT);
-    for (int k = 0; k < 256; k++)
-    {
-        int offset = k*8;
-        ALOGE("id:%d, position wx:%d, wy:%d, gx:%d, gy:%d, lxx:%d, ly:%d, nx:%d, ny:%d\n", k,
-              buff[offset], buff[offset+1], buff[offset+2], buff[offset+3],
-              buff[offset+4], buff[offset+5], buff[offset+6], buff[offset+7]);
+    glBindBuffer( GL_ARRAY_BUFFER, gDataBuff );
+    float* buff = (float *)glMapBufferRange(GL_ARRAY_BUFFER, 0, 4*mDataLen, GL_MAP_READ_BIT);
+
+    char str[1024];
+    for (int i = 0; i < 32; i++){
+        memset(str, 0, 1024);
+        for (int j = 0; j< 32; j++){
+            sprintf(str, "%s %6.4f", str, buff[i*32+j]);
+            //        int offset = k*8;
+            //        ALOGE("id:%d, position wx:%d, wy:%d, gx:%d, gy:%d, lxx:%d, ly:%d, nx:%d, ny:%d\n", k,
+            //              buff[offset], buff[offset+1], buff[offset+2], buff[offset+3],
+            //              buff[offset+4], buff[offset+5], buff[offset+6], buff[offset+7]);
+        }
+        ALOGE("%s", str);
+    }
+    for (int i = 0; i < 32; i++){
+        memset(str, 0, 1024);
+        for (int j = 0; j< 32; j++){
+            sprintf(str, "%s %6.4f", str, buff[32*32+i*32+j]);
+            //        int offset = k*8;
+            //        ALOGE("id:%d, position wx:%d, wy:%d, gx:%d, gy:%d, lxx:%d, ly:%d, nx:%d, ny:%d\n", k,
+            //              buff[offset], buff[offset+1], buff[offset+2], buff[offset+3],
+            //              buff[offset+4], buff[offset+5], buff[offset+6], buff[offset+7]);
+        }
+        ALOGE("%s", str);
     }
     glBindBuffer( GL_ARRAY_BUFFER, 0);
     checkGlError("Renderer::render");
