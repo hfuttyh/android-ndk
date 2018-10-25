@@ -59,6 +59,18 @@ void print2dFloatArray(float* buff, int x, int y, int offset){
     }
 }
 
+void print2dUintArray(uint * buff, int x, int y, int offset){
+    char str[10240];
+    for (int i = 0; i < y; i++){
+        memset(str, 0, 1024);
+        sprintf(str, "%d:", i);
+        for (int j = 0; j< x; j++){
+            sprintf(str, "%s %d", str, buff[offset+i*x+j]);
+        }
+        ALOGE("%s", str);
+    }
+}
+
 RenderES3* createES3Renderer(AAssetManager* asset) {
     RenderES3* renderer = new RenderES3;
     if (!renderer->init(asset)) {
@@ -97,8 +109,8 @@ bool RenderES3::init(AAssetManager* mgr) {
 
     asset = AAssetManager_open(mgr, "img_y.bin", AASSET_MODE_BUFFER);
     len = AAsset_getLength64(asset);
-    mDataLen = len/4*2;
-    mDataBuff = new float[len/4*2];
+    mDataLen = len/4;
+    mDataBuff = new float[mDataLen];
     buff = (char*) mDataBuff;
     AAsset_read(asset, buff, len);
     AAsset_close(asset);
@@ -127,14 +139,13 @@ RenderES3::~RenderES3() {
 void RenderES3::step() {
     glUseProgram(mComputeProgram);
 
+    float infoData[256];
 //Bind Data
     int gIndexBufferBinding = 0;
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, gDataBuff);
     glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mDataLen, mDataBuff, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, gDataBuff);
-    print2dFloatArray(mDataBuff, 160, 240, 0);
-    ALOGE("-0-0-0-0-0-0-0-0-0-0-0-0");
-    print2dFloatArray(mDataBuff, 160, 240, 38400);
+    // print2dFloatArray(mDataBuff, 160, 240, 0);
 
 //Bind it
     gIndexBufferBinding = 1;
@@ -142,6 +153,19 @@ void RenderES3::step() {
     glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mConvLen, mConvCoreBuff,  GL_STATIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, gCCBuff);
     print2dFloatArray(mConvCoreBuff, 3, 3, 0);
+
+    GLuint gOutId;
+    float outBuff[mDataLen];
+    glGenBuffers(1, &gOutId);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, gOutId);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mDataLen, outBuff, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, gOutId);
+
+    GLuint gInfoId;
+    glGenBuffers(1, &gInfoId);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, gInfoId);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*256, infoData, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, gInfoId);
 
     GLint out;
     GLenum enumName = GL_MAX_COMPUTE_WORK_GROUP_COUNT;
@@ -170,20 +194,28 @@ void RenderES3::step() {
 
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &out);
     ALOGE("GL_MAX_SHADER_STORAGE_BLOCK_SIZE:%d\n", out);
-    glDispatchCompute(1, 1, 1);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
+    glDispatchCompute(160, 240, 1);
+
 
     glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
-    glBindBuffer( GL_ARRAY_BUFFER, gDataBuff );
-    float* buff = (float *)glMapBufferRange(GL_ARRAY_BUFFER, 0, 4*mDataLen, GL_MAP_READ_BIT);
+    glBindBuffer( GL_SHADER_STORAGE_BUFFER, gOutId );
+    float* buff = (float *)glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, 4*mDataLen, GL_MAP_READ_BIT);
+    ALOGE("glMapBufferEnd");
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, 0);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, 0);
 
     print2dFloatArray(buff, 160, 240, 0);
-    ALOGE("=============================================");
-    print2dFloatArray(buff, 160, 240, 160*240);
 
-    glBindBuffer( GL_ARRAY_BUFFER, 0);
+//    glBindBuffer( GL_SHADER_STORAGE_BUFFER, gInfoId );
+//    float* infoBuff = (float *)glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, 4*256, GL_MAP_READ_BIT);
+//    print2dFloatArray(infoBuff, 9, 1, 0);
+//    print2dFloatArray(infoBuff, 240, 1, 9);
+
+    glBindBuffer( GL_SHADER_STORAGE_BUFFER, 0);
     checkGlError("Renderer::render");
 }
 
