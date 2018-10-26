@@ -1,6 +1,6 @@
 #version 310 es
-#define PIXW 160
-#define PIXH 240
+#define PIXW 320
+#define PIXH 480
 #define CONVCORESIZE 9
 layout(std430, binding = 0) buffer inBuffer
 {

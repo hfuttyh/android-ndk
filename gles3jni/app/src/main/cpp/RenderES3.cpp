@@ -18,13 +18,8 @@
 #include "gles3jni.h"
 #include "RenderES3.h"
 
-#define STR(s) #s
-#define STRV(s) STR(s)
-
-#define POS_ATTRIB 0
-#define COLOR_ATTRIB 1
-#define SCALEROT_ATTRIB 2
-#define OFFSET_ATTRIB 3
+#define PIXW 320
+#define PIXH 480
 
 static const char VERTEX_SHADER[] =
     "#version 310 es\n"
@@ -48,9 +43,9 @@ static const char FRAGMENT_SHADER[] =
     "}";
 
 void print2dFloatArray(float* buff, int x, int y, int offset){
-    char str[10240];
+    char str[102400];
     for (int i = 0; i < y; i++){
-        memset(str, 0, 1024);
+        memset(str, 0, 102400);
         sprintf(str, "%d:", i);
         for (int j = 0; j< x; j++){
             sprintf(str, "%s %6.4f", str, buff[offset+i*x+j]);
@@ -69,6 +64,39 @@ void print2dUintArray(uint * buff, int x, int y, int offset){
         }
         ALOGE("%s", str);
     }
+}
+
+float getDataByXY(float* data, int x, int y)
+{
+    if (x < 0 || y < 0 || x >= PIXW || y >= PIXH)
+        return 0;
+
+    return data[y*PIXW+x];
+}
+
+void computerConvolutionCPU(float* data, float* conv)
+{
+    ALOGE("==============CPU START=============");
+    float outbuff[PIXH*PIXW];
+    for (int y = 0; y < PIXH; y++)
+    {
+        for (int x = 0; x < PIXW; x++)
+        {
+            outbuff[y*PIXW+x] =
+                getDataByXY(data, x-1, y-1)*conv[0] +
+                getDataByXY(data, x, y-1) * conv[1] +
+                getDataByXY(data, x+1, y-1)*conv[2] +
+                getDataByXY(data, x-1, y) * conv[3] +
+                getDataByXY(data, x, y) * conv[4] +
+                getDataByXY(data, x+1, y) * conv[5] +
+                getDataByXY(data, x-1, y+1)*conv[6] +
+                getDataByXY(data, x, y+1) * conv[7] +
+                getDataByXY(data, x+1, y+1)*conv[8] +
+                conv[9];
+        }
+    }
+    ALOGE("==============CPU END=============");
+    print2dFloatArray(outbuff, PIXW, 40, 0);
 }
 
 RenderES3* createES3Renderer(AAssetManager* asset) {
@@ -109,16 +137,21 @@ bool RenderES3::init(AAssetManager* mgr) {
 
     asset = AAssetManager_open(mgr, "img_y.bin", AASSET_MODE_BUFFER);
     len = AAsset_getLength64(asset);
-    mDataLen = len/4;
+    mDataLen = len;
     mDataBuff = new float[mDataLen];
     buff = (char*) mDataBuff;
     AAsset_read(asset, buff, len);
     AAsset_close(asset);
 
+    memcpy(buff+len, buff, len);
+    memcpy(buff+2*len, buff, 2*len);
+
     glGenBuffers(1, &gDataBuff);
     glGenBuffers(1, &gCCBuff);
 
     step();
+
+    computerConvolutionCPU(mDataBuff, mConvCoreBuff);
     ALOGV("Using OpenGL ES 3.0 renderer");
     return true;
 }
@@ -141,14 +174,12 @@ void RenderES3::step() {
 
     float infoData[256];
 //Bind Data
-    int gIndexBufferBinding = 0;
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, gDataBuff);
     glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mDataLen, mDataBuff, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, gDataBuff);
-    // print2dFloatArray(mDataBuff, 160, 240, 0);
+    // print2dFloatArray(mDataBuff, PIXW, PIXH, 0);
 
 //Bind it
-    gIndexBufferBinding = 1;
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, gCCBuff);
     glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mConvLen, mConvCoreBuff,  GL_STATIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, gCCBuff);
@@ -194,26 +225,23 @@ void RenderES3::step() {
 
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &out);
     ALOGE("GL_MAX_SHADER_STORAGE_BLOCK_SIZE:%d\n", out);
-    glDispatchCompute(160, 240, 1);
+    ALOGE("===============GPU start=============");
+    glDispatchCompute(PIXW, PIXH, 1);
 
 
     glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
     glBindBuffer( GL_SHADER_STORAGE_BUFFER, gOutId );
     float* buff = (float *)glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, 4*mDataLen, GL_MAP_READ_BIT);
-    ALOGE("glMapBufferEnd");
+    ALOGE("===============GPU end=============");
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, 0);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, 0);
 
-    print2dFloatArray(buff, 160, 240, 0);
+    print2dFloatArray(buff, PIXW, 30, 0);
 
-//    glBindBuffer( GL_SHADER_STORAGE_BUFFER, gInfoId );
-//    float* infoBuff = (float *)glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, 4*256, GL_MAP_READ_BIT);
-//    print2dFloatArray(infoBuff, 9, 1, 0);
-//    print2dFloatArray(infoBuff, 240, 1, 9);
 
     glBindBuffer( GL_SHADER_STORAGE_BUFFER, 0);
     checkGlError("Renderer::render");
