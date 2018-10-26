@@ -172,6 +172,15 @@ RenderES3::~RenderES3() {
 void RenderES3::step() {
     glUseProgram(mComputeProgram);
 
+    GLint iInputChannel = glGetUniformLocation(mComputeProgram, "inputChannel");
+    glUniform1f(iInputChannel, 1);
+
+    GLint iInputW = glGetUniformLocation(mComputeProgram, "inputW");
+    glUniform1f(iInputW, PIXW);
+
+    GLint iInputH = glGetUniformLocation(mComputeProgram, "inputH");
+    glUniform1f(iInputH, PIXH);
+
     float infoData[256];
 //Bind Data
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, gDataBuff);
