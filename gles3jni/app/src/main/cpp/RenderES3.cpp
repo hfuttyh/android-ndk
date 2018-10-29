@@ -21,27 +21,6 @@
 #define PIXW 320
 #define PIXH 480
 
-static const char VERTEX_SHADER[] =
-    "#version 310 es\n"
-    "in vec4 a_v4Position;\n"
-    "in vec4 a_v4FillColor;\n"
-    "out vec4 v_v4FillColor;\n"
-    "void main()\n"
-    "{\n"
-    "      v_v4FillColor = a_v4FillColor;\n"
-    "      gl_Position = a_v4Position;\n"
-    "}\n";
-
-static const char FRAGMENT_SHADER[] =
-    "#version 310 es\n"
-    "precision mediump float;\n"
-    "in vec4 v_v4FillColor;\n"
-    "out vec4 FragColor;\n"
-    "void main()\n"
-    "{\n"
-    "      FragColor = v_v4FillColor;\n"
-    "}";
-
 void print2dFloatArray(float* buff, int x, int y, int offset){
     char str[102400];
     for (int i = 0; i < y; i++){
@@ -82,7 +61,7 @@ void computerConvolutionCPU(float* data, float* conv)
     {
         for (int x = 0; x < PIXW; x++)
         {
-            outbuff[y*PIXW+x] =
+            float ret =
                 getDataByXY(data, x-1, y-1)*conv[0] +
                 getDataByXY(data, x, y-1) * conv[1] +
                 getDataByXY(data, x+1, y-1)*conv[2] +
@@ -93,6 +72,7 @@ void computerConvolutionCPU(float* data, float* conv)
                 getDataByXY(data, x, y+1) * conv[7] +
                 getDataByXY(data, x+1, y+1)*conv[8] +
                 conv[9];
+            outbuff[y*PIXW+x] = tanh(ret);
         }
     }
     ALOGE("==============CPU END=============");
@@ -173,13 +153,13 @@ void RenderES3::step() {
     glUseProgram(mComputeProgram);
 
     GLint iInputChannel = glGetUniformLocation(mComputeProgram, "inputChannel");
-    glUniform1f(iInputChannel, 1);
+    glUniform1i(iInputChannel, 1);
 
     GLint iInputW = glGetUniformLocation(mComputeProgram, "inputW");
-    glUniform1f(iInputW, PIXW);
+    glUniform1i(iInputW, PIXW);
 
     GLint iInputH = glGetUniformLocation(mComputeProgram, "inputH");
-    glUniform1f(iInputH, PIXH);
+    glUniform1i(iInputH, PIXH);
 
     float infoData[256];
 //Bind Data

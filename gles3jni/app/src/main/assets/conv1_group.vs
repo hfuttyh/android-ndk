@@ -1,5 +1,10 @@
 #version 310 es
 #define CONVCORESIZE 9
+// X <= Y return 1.0f, otherwise return 0.0f
+// X lessEqual Y
+#define XLEY(X, Y) step(float(X), float(Y))
+// X bigger than Y
+#define XBY(X, Y) (1.0f-step(float(X), float(Y)))
 
 uniform int inputChannel;
 uniform int inputW;
@@ -33,6 +38,13 @@ layout(std430, binding = 3) buffer tBuffer
 // gl_WorkGroupID.z定义卷积核id即输出通道数
 layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
+// float tanh(float x)
+// {
+// 	float ex = exp(x);
+// 	float enx = exp(-x);
+// 	return (ex-enx)/(ex+enx);
+// }
+
 void main()
 {
 	// if (gl_LocalInvocationID.y >= uint(inputH))
@@ -44,7 +56,7 @@ void main()
 	int pixOffset = position.y*inputW + position.x;
 
 	float pix[9];
-	float steptmp;
+	float boolret;
 	// pix[0] = position.y > 0 && position.x > 0 ? picBuffer.pic[pixOffset-inputW-1] : 0.f;
 	// pix[1] = position.y > 0 ? picBuffer.pic[pixOffset-inputW] : 0.f;
 	// pix[2] = position.y > 0 && position.x < inputW-1 ? picBuffer.pic[pixOffset-inputW+1] : 0.f;
@@ -54,40 +66,41 @@ void main()
 	// pix[6] = position.y < inputH-1 && position.x > 0 ? picBuffer.pic[pixOffset+inputW-1] : 0.f;
 	// pix[7] = position.y < inputH-1 ? picBuffer.pic[pixOffset+inputW] : 0.f;
 	// pix[8] = position.y < inputH-1 && position.x < inputW-1 ? picBuffer.pic[pixOffset+inputW+1] : 0.f;
-	steptmp = step(0, int(position.y))*step(0, int(position.x));
+	// upleft
+	boolret = XBY(position.y, 0)*XBY(position.x, 0);
 	for (int k = 0; k < inputChannel; k++)
-		pix[0] += steptmp*picBuffer.pic[pixOffset + k * inputW * inputH-inputW-1];
+		pix[0] += boolret*picBuffer.pic[pixOffset + k * inputW * inputH-inputW-1];
 	// up
-	steptmp = step(0, int(position.y));
+	boolret = XBY(position.y, 0);
 	for (int k = 0; k < inputChannel; k++)
-		pix[1] += steptmp*picBuffer.pic[pixOffset + k * inputW * inputH-inputW];
+		pix[1] += boolret*picBuffer.pic[pixOffset + k * inputW * inputH-inputW];
 	// upright
-	steptmp = step(0, int(position.y))*step(int(position.x), inputW-1);
+	boolret = XBY(position.y, 0)*XLEY(position.x, inputW-2);
 	for (int k = 0; k < inputChannel; k++)
-		pix[2] += steptmp*picBuffer.pic[pixOffset + k * inputW * inputH-inputW+1];
+		pix[2] += boolret*picBuffer.pic[pixOffset + k * inputW * inputH-inputW+1];
 	// left
-	steptmp = step(0, int(position.x));
+	boolret = XBY(position.x, 0);
 	for (int k = 0; k < inputChannel; k++)
-		pix[3] += steptmp*picBuffer.pic[pixOffset + k * inputW * inputH-1];
+		pix[3] += boolret*picBuffer.pic[pixOffset + k * inputW * inputH-1];
 	// center
 	for (int k = 0; k < inputChannel; k++)
 		pix[4] += picBuffer.pic[pixOffset + k * inputW * inputH];
 	// right
-	steptmp = step(int(position.x), inputW-1);
+	boolret = XLEY(position.x, inputW-2);
 	for (int k = 0; k < inputChannel; k++)
-		pix[5] += steptmp*picBuffer.pic[pixOffset + k * inputW * inputH+1];
+		pix[5] += boolret*picBuffer.pic[pixOffset + k * inputW * inputH+1];
 	// bottomleft
-	steptmp = step(int(position.y), inputH-1)*step(0, int(position.x));
+	boolret = XLEY(position.y, inputH-2)*XBY(position.x, 0);
 	for (int k = 0; k < inputChannel; k++)
-		pix[6] += steptmp*picBuffer.pic[pixOffset + k * inputW * inputH+inputW-1];
+		pix[6] += boolret*picBuffer.pic[pixOffset + k * inputW * inputH+inputW-1];
 	// bottom
-	steptmp = step(int(position.y), inputH-1);
+	boolret = XLEY(position.y, inputH-2);
 	for (int k = 0; k < inputChannel; k++)
-		pix[7] += steptmp*picBuffer.pic[pixOffset + k * inputW * inputH+inputW];
+		pix[7] += boolret*picBuffer.pic[pixOffset + k * inputW * inputH+inputW];
 	// bottomright
-	steptmp = step(int(position.y), inputH-1)*step(int(position.x), inputW-1);
+	boolret = XLEY(position.y, inputH-2)*XLEY(position.x, inputW-2);
 	for (int k = 0; k < inputChannel; k++)
-		pix[8] += steptmp*picBuffer.pic[pixOffset + k * inputW * inputH+inputW+1];
+		pix[8] += boolret*picBuffer.pic[pixOffset + k * inputW * inputH+inputW+1];
 
 	float result = 0.f;
 	for (int k = 0; k < 9; k++)
@@ -98,5 +111,5 @@ void main()
 	// tmpBuffer.tmp[0] = picBuffer.pic[pixOffset];
 	// tmpBuffer.tmp[1] = picBuffer.pic[0];
 
-	outBuffer.data[pixOffset] = result + convBuffer.conv[convCoreOffset+9];		
+	outBuffer.data[pixOffset] = tanh(result + convBuffer.conv[convCoreOffset+9]);
 }
