@@ -276,10 +276,10 @@ void RenderES3::conv1() {
     glBindBuffer( GL_SHADER_STORAGE_BUFFER, outData2.gint );
     buff = (float *)glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, 4*outData2.buffLen, GL_MAP_READ_BIT);
     ALOGE("===============GPU end=============");
-//    print2dFloatArray(buff, PIXW, 30, 0);
-//    print2dFloatArray(buff, PIXW, 30, PIXW*PIXH);
-//    print2dFloatArray(buff, PIXW, 30, 2*PIXW*PIXH);
-//    print2dFloatArray(buff, PIXW, 30, 3*PIXW*PIXH);
+    print2dFloatArray(buff, PIXW, 30, 0);
+    print2dFloatArray(buff, PIXW, 30, PIXW*PIXH);
+    print2dFloatArray(buff, PIXW, 30, 2*PIXW*PIXH);
+    print2dFloatArray(buff, PIXW, 30, 3*PIXW*PIXH);
     glBindBuffer( GL_SHADER_STORAGE_BUFFER, 0);
 }
 

@@ -47,53 +47,66 @@ void main()
 	int pixOffset = position.y*inputW + position.x;
 
 	float pix[9];
-	float boolret;
-	// pix[0] = position.y > 0 && position.x > 0 ? picBuffer.pic[pixOffset-inputW-1] : 0.f;
-	// pix[1] = position.y > 0 ? picBuffer.pic[pixOffset-inputW] : 0.f;
-	// pix[2] = position.y > 0 && position.x < inputW-1 ? picBuffer.pic[pixOffset-inputW+1] : 0.f;
-	// pix[3] = position.x > 0 ? picBuffer.pic[pixOffset-1] : 0.f;
-	// pix[4] = picBuffer.pic[pixOffset];
-	// pix[5] = position.x < inputW-1 ? picBuffer.pic[pixOffset+1] : 0.f;
-	// pix[6] = position.y < inputH-1 && position.x > 0 ? picBuffer.pic[pixOffset+inputW-1] : 0.f;
-	// pix[7] = position.y < inputH-1 ? picBuffer.pic[pixOffset+inputW] : 0.f;
-	// pix[8] = position.y < inputH-1 && position.x < inputW-1 ? picBuffer.pic[pixOffset+inputW+1] : 0.f;
-	float result = 0.f;
-	for (int k = 0; k < inputChannel; k++)
-	{
-		inputChannelOffset = k * inputW * inputH;
-		// upleft
-		boolret = XBY(position.y, 0)*XBY(position.x, 0);
-		pix[0] = boolret*picBuffer.pic[pixOffset + inputChannelOffset-inputW-1];
-		// up
-		boolret = XBY(position.y, 0);
-		pix[1] = boolret*picBuffer.pic[pixOffset + inputChannelOffset-inputW];
-		// upright
-		boolret = XBY(position.y, 0)*XLEY(position.x, inputW-2);
-		pix[2] = boolret*picBuffer.pic[pixOffset + inputChannelOffset-inputW+1];
-		// left
-		boolret = XBY(position.x, 0);
-		pix[3] = boolret*picBuffer.pic[pixOffset + inputChannelOffset-1];
-		// center
-		pix[4] = picBuffer.pic[pixOffset + inputChannelOffset];
-		// right
-		boolret = XLEY(position.x, inputW-2);
-		pix[5] = boolret*picBuffer.pic[pixOffset + inputChannelOffset+1];
-		// bottomleft
-		boolret = XLEY(position.y, inputH-2)*XBY(position.x, 0);
-		pix[6] = boolret*picBuffer.pic[pixOffset + inputChannelOffset+inputW-1];
-		// bottom
-		boolret = XLEY(position.y, inputH-2);
-		pix[7] = boolret*picBuffer.pic[pixOffset + inputChannelOffset+inputW];
-		// bottomright
-		boolret = XLEY(position.y, inputH-2)*XLEY(position.x, inputW-2);
-		pix[8] = boolret*picBuffer.pic[pixOffset + inputChannelOffset+inputW+1];
-	
-		for (int ck = 0; ck < 9; ck++)
-		{
-			// tmpBuffer.tmp[k] = pix[k];
-		    result += convBuffer.conv[convCoreOffset+k*CONVCORESIZE+ck]*pix[ck];
-		}
-	}
+      float result = 0.f;
+      for (int k = 0; k < inputChannel; k++)
+      {
+            inputChannelOffset = k * inputW * inputH;
+
+      	pix[0] = position.y > 0 && position.x > 0 ? picBuffer.pic[pixOffset+inputChannelOffset-inputW-1] : 0.f;
+      	pix[1] = position.y > 0 ? picBuffer.pic[pixOffset+inputChannelOffset-inputW] : 0.f;
+      	pix[2] = position.y > 0 && position.x < inputW-1 ? picBuffer.pic[pixOffset+inputChannelOffset-inputW+1] : 0.f;
+      	pix[3] = position.x > 0 ? picBuffer.pic[pixOffset+inputChannelOffset-1] : 0.f;
+      	pix[4] = picBuffer.pic[pixOffset+inputChannelOffset];
+      	pix[5] = position.x < inputW-1 ? picBuffer.pic[pixOffset+inputChannelOffset+1] : 0.f;
+      	pix[6] = position.y < inputH-1 && position.x > 0 ? picBuffer.pic[pixOffset+inputChannelOffset+inputW-1] : 0.f;
+      	pix[7] = position.y < inputH-1 ? picBuffer.pic[pixOffset+inputChannelOffset+inputW] : 0.f;
+      	pix[8] = position.y < inputH-1 && position.x < inputW-1 ? picBuffer.pic[pixOffset+inputChannelOffset+inputW+1] : 0.f;
+            for (int ck = 0; ck < 9; ck++)
+            {
+               // tmpBuffer.tmp[k] = pix[k];
+             result += convBuffer.conv[convCoreOffset+k*CONVCORESIZE+ck]*pix[ck];
+            }
+      }
+      // 
+      // step版本华为honor9上会crash。。莫名其妙
+      // 
+      // float boolret;
+	// for (int k = 0; k < inputChannel; k++)
+	// {
+	// 	inputChannelOffset = k * inputW * inputH;
+	// 	// upleft
+	// 	boolret = XBY(position.y, 0)*XBY(position.x, 0);
+	// 	pix[0] = boolret*picBuffer.pic[pixOffset + inputChannelOffset-inputW-1];
+	// 	// up
+	// 	boolret = XBY(position.y, 0);
+	// 	pix[1] = boolret*picBuffer.pic[pixOffset + inputChannelOffset-inputW];
+	// 	// upright
+	// 	boolret = XBY(position.y, 0)*XLEY(position.x, inputW-2);
+	// 	pix[2] = boolret*picBuffer.pic[pixOffset + inputChannelOffset-inputW+1];
+	// 	// left
+	// 	boolret = XBY(position.x, 0);
+	// 	pix[3] = boolret*picBuffer.pic[pixOffset + inputChannelOffset-1];
+	// 	// center
+	// 	pix[4] = picBuffer.pic[pixOffset + inputChannelOffset];
+	// 	// right
+	// 	boolret = XLEY(position.x, inputW-2);
+	// 	pix[5] = boolret*picBuffer.pic[pixOffset + inputChannelOffset+1];
+	// 	// bottomleft
+	// 	boolret = XLEY(position.y, inputH-2)*XBY(position.x, 0);
+	// 	pix[6] = boolret*picBuffer.pic[pixOffset + inputChannelOffset+inputW-1];
+	// 	// bottom
+	// 	boolret = XLEY(position.y, inputH-2);
+	// 	pix[7] = boolret*picBuffer.pic[pixOffset + inputChannelOffset+inputW];
+	// 	// bottomright
+	// 	boolret = XLEY(position.y, inputH-2)*XLEY(position.x, inputW-2);
+	// 	pix[8] = boolret*picBuffer.pic[pixOffset + inputChannelOffset+inputW+1];
+	// 
+	// 	for (int ck = 0; ck < 9; ck++)
+	// 	{
+	// 		// tmpBuffer.tmp[k] = pix[k];
+	// 	    result += convBuffer.conv[convCoreOffset+k*CONVCORESIZE+ck]*pix[ck];
+	// 	}
+	// }
 
 	// tmpBuffer.tmp[0] = picBuffer.pic[pixOffset];
 	// tmpBuffer.tmp[1] = picBuffer.pic[0];
