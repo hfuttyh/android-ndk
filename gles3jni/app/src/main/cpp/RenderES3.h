@@ -24,6 +24,11 @@
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
 
+typedef struct convOutStruct{
+    GLuint gint;
+    float* buff;
+    int buffLen;
+} ConvOutData;
 
 class RenderES3{
 public:
@@ -33,7 +38,11 @@ public:
     void resize(int w, int h){
         glViewport(0, 0, w, h);
     }
-    void step();
+    void computeConv(int pixW, int pixH, int inputChannel, int outputChannel,
+                     GLuint gDataInt, GLuint gConvInt, GLuint gOutDataInt);
+    void GPUInfo();
+    void conv1();
+    void conv2();
     void render();
 
 private:
@@ -48,8 +57,10 @@ private:
     GLuint gCCBuff;
 
     int mDataLen;
-    int mConvLen;
+    int mConv1Len;
+    int mConv3Len;
     float *mDataBuff;
-    float *mConvCoreBuff;
+    float *mConv1Buff;
+    float *mConv3Buff;
 };
 #endif //GLES3JNI_RENDERES3_H

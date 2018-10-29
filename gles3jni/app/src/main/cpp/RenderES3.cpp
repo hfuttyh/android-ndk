@@ -18,8 +18,8 @@
 #include "gles3jni.h"
 #include "RenderES3.h"
 
-#define PIXW 320
-#define PIXH 480
+#define PIXW 160
+#define PIXH 240
 
 void print2dFloatArray(float* buff, int x, int y, int offset){
     char str[102400];
@@ -107,31 +107,37 @@ bool RenderES3::init(AAssetManager* mgr) {
         return false;
     delete[] buff;
 
-    asset = AAssetManager_open(mgr, "model_param.bin", AASSET_MODE_BUFFER);
+    asset = AAssetManager_open(mgr, "model_param_conv1.bin", AASSET_MODE_BUFFER);
     len = AAsset_getLength64(asset);
-    mConvLen = len/4;
-    mConvCoreBuff = new float[len/4];
-    buff = (char*) mConvCoreBuff;
+    mConv1Len = len/4;
+    mConv1Buff = new float[len/4];
+    buff = (char*) mConv1Buff;
+    AAsset_read(asset, buff, len);
+    AAsset_close(asset);
+
+    asset = AAssetManager_open(mgr, "model_param_conv3.bin", AASSET_MODE_BUFFER);
+    len = AAsset_getLength64(asset);
+    mConv3Len = len/4;
+    mConv3Buff = new float[len/4];
+    buff = (char*) mConv3Buff;
     AAsset_read(asset, buff, len);
     AAsset_close(asset);
 
     asset = AAssetManager_open(mgr, "img_y.bin", AASSET_MODE_BUFFER);
     len = AAsset_getLength64(asset);
-    mDataLen = len;
+    mDataLen = len/4;
     mDataBuff = new float[mDataLen];
     buff = (char*) mDataBuff;
     AAsset_read(asset, buff, len);
     AAsset_close(asset);
 
-    memcpy(buff+len, buff, len);
-    memcpy(buff+2*len, buff, 2*len);
-
     glGenBuffers(1, &gDataBuff);
     glGenBuffers(1, &gCCBuff);
 
-    step();
+    GPUInfo();
+    conv1();
 
-    computerConvolutionCPU(mDataBuff, mConvCoreBuff);
+    // computerConvolutionCPU(mDataBuff, mConvCoreBuff);
     ALOGV("Using OpenGL ES 3.0 renderer");
     return true;
 }
@@ -149,43 +155,8 @@ RenderES3::~RenderES3() {
     glDeleteProgram(mComputeProgram);
 }
 
-void RenderES3::step() {
+void RenderES3::GPUInfo() {
     glUseProgram(mComputeProgram);
-
-    GLint iInputChannel = glGetUniformLocation(mComputeProgram, "inputChannel");
-    glUniform1i(iInputChannel, 1);
-
-    GLint iInputW = glGetUniformLocation(mComputeProgram, "inputW");
-    glUniform1i(iInputW, PIXW);
-
-    GLint iInputH = glGetUniformLocation(mComputeProgram, "inputH");
-    glUniform1i(iInputH, PIXH);
-
-    float infoData[256];
-//Bind Data
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, gDataBuff);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mDataLen, mDataBuff, GL_DYNAMIC_DRAW);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, gDataBuff);
-    // print2dFloatArray(mDataBuff, PIXW, PIXH, 0);
-
-//Bind it
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, gCCBuff);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mConvLen, mConvCoreBuff,  GL_STATIC_DRAW);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, gCCBuff);
-    print2dFloatArray(mConvCoreBuff, 3, 3, 0);
-
-    GLuint gOutId;
-    float outBuff[mDataLen];
-    glGenBuffers(1, &gOutId);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, gOutId);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mDataLen, outBuff, GL_DYNAMIC_DRAW);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, gOutId);
-
-    GLuint gInfoId;
-    glGenBuffers(1, &gInfoId);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, gInfoId);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*256, infoData, GL_DYNAMIC_DRAW);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, gInfoId);
 
     GLint out;
     GLenum enumName = GL_MAX_COMPUTE_WORK_GROUP_COUNT;
@@ -214,26 +185,106 @@ void RenderES3::step() {
 
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &out);
     ALOGE("GL_MAX_SHADER_STORAGE_BLOCK_SIZE:%d\n", out);
-    ALOGE("===============GPU start=============");
-    glDispatchCompute(PIXW, PIXH, 1);
+}
 
+void RenderES3::computeConv(int pixW, int pixH, int inputChannel, int outputChannel,
+    GLuint gDataInt, GLuint gConvInt, GLuint gOutDataInt)
+{
+    glUseProgram(mComputeProgram);
+
+    GLint iInputChannel = glGetUniformLocation(mComputeProgram, "inputChannel");
+    glUniform1i(iInputChannel, inputChannel);
+
+    GLint iInputW = glGetUniformLocation(mComputeProgram, "inputW");
+    glUniform1i(iInputW, pixW);
+
+    GLint iInputH = glGetUniformLocation(mComputeProgram, "inputH");
+    glUniform1i(iInputH, pixH);
+
+    float infoData[256];
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, gDataInt);
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, gConvInt);
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, gOutDataInt);
+
+    GLuint gInfoId;
+    glGenBuffers(1, &gInfoId);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, gInfoId);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*256, infoData, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, gInfoId);
+
+    ALOGE("===============GPU start=============");
+    glDispatchCompute(PIXW, PIXH, outputChannel);
 
     glMemoryBarrier(GL_ALL_BARRIER_BITS);
-
-    glBindBuffer( GL_SHADER_STORAGE_BUFFER, gOutId );
-    float* buff = (float *)glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, 4*mDataLen, GL_MAP_READ_BIT);
-    ALOGE("===============GPU end=============");
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, 0);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, 0);
-
-    print2dFloatArray(buff, PIXW, 30, 0);
-
-
     glBindBuffer( GL_SHADER_STORAGE_BUFFER, 0);
-    checkGlError("Renderer::render");
+}
+
+void RenderES3::conv1() {
+    int outputChannel = 4;
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, gDataBuff);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mDataLen, mDataBuff, GL_DYNAMIC_DRAW);
+    // print2dFloatArray(mDataBuff, PIXW, PIXH, 0);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, gCCBuff);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mConv1Len, mConv1Buff,  GL_STATIC_DRAW);
+    print2dFloatArray(mConv1Buff, 3, 3, 0);
+
+    ConvOutData outData;
+    glGenBuffers(1, &outData.gint);
+    outData.buffLen = outputChannel*PIXW*PIXH;
+    outData.buff = new float[outData.buffLen];
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, outData.gint);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*outData.buffLen, outData.buff, GL_DYNAMIC_DRAW);
+
+    computeConv(PIXW, PIXH, 1, outputChannel, gDataBuff, gCCBuff, outData.gint);
+
+    float * buff;
+//    glBindBuffer( GL_SHADER_STORAGE_BUFFER, outData.gint );
+//    buff = (float *)glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, 4*outData.buffLen, GL_MAP_READ_BIT);
+    ALOGE("===============GPU end=============");
+//    print2dFloatArray(buff, PIXW, 30, 0);
+//    print2dFloatArray(buff, PIXW, 30, PIXW*PIXH);
+//    print2dFloatArray(buff, PIXW, 30, 2*PIXW*PIXH);
+//    print2dFloatArray(buff, PIXW, 30, 3*PIXW*PIXH);
+//    glBindBuffer( GL_SHADER_STORAGE_BUFFER, 0);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, gDataBuff);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mDataLen, mDataBuff, GL_DYNAMIC_DRAW);
+    // print2dFloatArray(mDataBuff, PIXW, PIXH, 0);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, gCCBuff);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*mConv3Len, mConv3Buff,  GL_STATIC_DRAW);
+    // print2dFloatArray(mConv1Buff, 3, 3, 0);
+
+    ConvOutData outData2;
+    glGenBuffers(1, &outData2.gint);
+    outData2.buffLen = outputChannel*PIXW*PIXH;
+    outData2.buff = new float[outData.buffLen];
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, outData2.gint);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, 4*outData2.buffLen, outData2.buff, GL_DYNAMIC_DRAW);
+
+    computeConv(PIXW, PIXH, 4, outputChannel, outData.gint, gCCBuff, outData2.gint);
+
+    glBindBuffer( GL_SHADER_STORAGE_BUFFER, outData2.gint );
+    buff = (float *)glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, 4*outData2.buffLen, GL_MAP_READ_BIT);
+    ALOGE("===============GPU end=============");
+//    print2dFloatArray(buff, PIXW, 30, 0);
+//    print2dFloatArray(buff, PIXW, 30, PIXW*PIXH);
+//    print2dFloatArray(buff, PIXW, 30, 2*PIXW*PIXH);
+//    print2dFloatArray(buff, PIXW, 30, 3*PIXW*PIXH);
+    glBindBuffer( GL_SHADER_STORAGE_BUFFER, 0);
+}
+
+void RenderES3::conv2() {
+
 }
 
 void RenderES3::render() {

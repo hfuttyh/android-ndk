@@ -38,20 +38,11 @@ layout(std430, binding = 3) buffer tBuffer
 // gl_WorkGroupID.z定义卷积核id即输出通道数
 layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-// float tanh(float x)
-// {
-// 	float ex = exp(x);
-// 	float enx = exp(-x);
-// 	return (ex-enx)/(ex+enx);
-// }
-
 void main()
 {
-	// if (gl_LocalInvocationID.y >= uint(inputH))
-	// 	return;
-
-	int baseOffset = (int(gl_WorkGroupID.x)+1)*inputW*inputH;
-	int convCoreOffset = int(gl_WorkGroupID.z)*(CONVCORESIZE+1); // 9 convcore, 1 bias
+	int inputChannelOffset  = 0;
+	int outputChannelOffset = int(gl_WorkGroupID.z)*inputW*inputH;
+	int convCoreOffset = int(gl_WorkGroupID.z)*(inputChannel*CONVCORESIZE+1); // 9 convcore, 1 bias
 	ivec2 position = ivec2(gl_WorkGroupID.x, gl_WorkGroupID.y);
 	int pixOffset = position.y*inputW + position.x;
 
@@ -66,50 +57,46 @@ void main()
 	// pix[6] = position.y < inputH-1 && position.x > 0 ? picBuffer.pic[pixOffset+inputW-1] : 0.f;
 	// pix[7] = position.y < inputH-1 ? picBuffer.pic[pixOffset+inputW] : 0.f;
 	// pix[8] = position.y < inputH-1 && position.x < inputW-1 ? picBuffer.pic[pixOffset+inputW+1] : 0.f;
-	// upleft
-	boolret = XBY(position.y, 0)*XBY(position.x, 0);
-	for (int k = 0; k < inputChannel; k++)
-		pix[0] += boolret*picBuffer.pic[pixOffset + k * inputW * inputH-inputW-1];
-	// up
-	boolret = XBY(position.y, 0);
-	for (int k = 0; k < inputChannel; k++)
-		pix[1] += boolret*picBuffer.pic[pixOffset + k * inputW * inputH-inputW];
-	// upright
-	boolret = XBY(position.y, 0)*XLEY(position.x, inputW-2);
-	for (int k = 0; k < inputChannel; k++)
-		pix[2] += boolret*picBuffer.pic[pixOffset + k * inputW * inputH-inputW+1];
-	// left
-	boolret = XBY(position.x, 0);
-	for (int k = 0; k < inputChannel; k++)
-		pix[3] += boolret*picBuffer.pic[pixOffset + k * inputW * inputH-1];
-	// center
-	for (int k = 0; k < inputChannel; k++)
-		pix[4] += picBuffer.pic[pixOffset + k * inputW * inputH];
-	// right
-	boolret = XLEY(position.x, inputW-2);
-	for (int k = 0; k < inputChannel; k++)
-		pix[5] += boolret*picBuffer.pic[pixOffset + k * inputW * inputH+1];
-	// bottomleft
-	boolret = XLEY(position.y, inputH-2)*XBY(position.x, 0);
-	for (int k = 0; k < inputChannel; k++)
-		pix[6] += boolret*picBuffer.pic[pixOffset + k * inputW * inputH+inputW-1];
-	// bottom
-	boolret = XLEY(position.y, inputH-2);
-	for (int k = 0; k < inputChannel; k++)
-		pix[7] += boolret*picBuffer.pic[pixOffset + k * inputW * inputH+inputW];
-	// bottomright
-	boolret = XLEY(position.y, inputH-2)*XLEY(position.x, inputW-2);
-	for (int k = 0; k < inputChannel; k++)
-		pix[8] += boolret*picBuffer.pic[pixOffset + k * inputW * inputH+inputW+1];
-
 	float result = 0.f;
-	for (int k = 0; k < 9; k++)
+	for (int k = 0; k < inputChannel; k++)
 	{
-		// tmpBuffer.tmp[k] = pix[k];
-	    result += convBuffer.conv[convCoreOffset+k]*pix[k];
+		inputChannelOffset = k * inputW * inputH;
+		// upleft
+		boolret = XBY(position.y, 0)*XBY(position.x, 0);
+		pix[0] = boolret*picBuffer.pic[pixOffset + inputChannelOffset-inputW-1];
+		// up
+		boolret = XBY(position.y, 0);
+		pix[1] = boolret*picBuffer.pic[pixOffset + inputChannelOffset-inputW];
+		// upright
+		boolret = XBY(position.y, 0)*XLEY(position.x, inputW-2);
+		pix[2] = boolret*picBuffer.pic[pixOffset + inputChannelOffset-inputW+1];
+		// left
+		boolret = XBY(position.x, 0);
+		pix[3] = boolret*picBuffer.pic[pixOffset + inputChannelOffset-1];
+		// center
+		pix[4] = picBuffer.pic[pixOffset + inputChannelOffset];
+		// right
+		boolret = XLEY(position.x, inputW-2);
+		pix[5] = boolret*picBuffer.pic[pixOffset + inputChannelOffset+1];
+		// bottomleft
+		boolret = XLEY(position.y, inputH-2)*XBY(position.x, 0);
+		pix[6] = boolret*picBuffer.pic[pixOffset + inputChannelOffset+inputW-1];
+		// bottom
+		boolret = XLEY(position.y, inputH-2);
+		pix[7] = boolret*picBuffer.pic[pixOffset + inputChannelOffset+inputW];
+		// bottomright
+		boolret = XLEY(position.y, inputH-2)*XLEY(position.x, inputW-2);
+		pix[8] = boolret*picBuffer.pic[pixOffset + inputChannelOffset+inputW+1];
+	
+		for (int ck = 0; ck < 9; ck++)
+		{
+			// tmpBuffer.tmp[k] = pix[k];
+		    result += convBuffer.conv[convCoreOffset+k*CONVCORESIZE+ck]*pix[ck];
+		}
 	}
+
 	// tmpBuffer.tmp[0] = picBuffer.pic[pixOffset];
 	// tmpBuffer.tmp[1] = picBuffer.pic[0];
 
-	outBuffer.data[pixOffset] = tanh(result + convBuffer.conv[convCoreOffset+9]);
+	outBuffer.data[outputChannelOffset + pixOffset] = tanh(result + convBuffer.conv[convCoreOffset+inputChannel*CONVCORESIZE]);
 }
